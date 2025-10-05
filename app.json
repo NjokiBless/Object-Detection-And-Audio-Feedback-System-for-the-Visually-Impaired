@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Bloculis",
+    "slug": "Bloculis",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to detect obstacles in real time.",
+        "NSLocationWhenInUseUsageDescription": "We use your location to include it in SOS messages for your safety.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to include it in SOS messages for your safety.",
+        "NSFaceIDUsageDescription": "Use Face ID to quickly sign you in."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-mail-composer",
+      "expo-secure-store"
+    ]
+  }
+}
