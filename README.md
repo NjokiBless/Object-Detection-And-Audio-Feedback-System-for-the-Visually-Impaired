@@ -1,59 +1,53 @@
 # Object Detector + Navigation Assistant
 
-A real-time object detection and navigation assistant built for mobile. The app uses deep-learning object detection to identify nearby objects through the phone camera and provides voice guidance and map-based navigation to a user’s chosen destination. The system has a FastAPI backend, a React Native (Expo) mobile client, and integrates Google Maps for turn-by-turn voice navigation.
-
----
+A real-time object detection and navigation assistant built for mobile. The app uses a deep-learning object detection model served via a FastAPI backend, while the React Native (Expo) client streams camera frames, displays detections, and supports Google Maps voice navigation to a selected destination.
 
 ## Project Overview
 
-This system supports two major functions:
+This system helps users:
 
-1. **Real-time Object Detection**
+* Detect objects in real time using their phone camera
+* Receive spoken feedback describing detected objects
+* Navigate to a chosen destination using Google Maps with continuous voice guidance
+* Access safety, accessibility, and profile tools inside the app
 
-   * Detects everyday objects from the live camera feed.
-   * Displays labeled bounding boxes on screen.
-   * Speaks detections aloud through a built-in voice assistant.
+**Core Features**
 
-2. **Map-Based Voice Navigation**
+* **Real-time Object Detection:** Live camera feed with bounding box overlays and labels.
+* **Voice Guidance:** Spoken feedback for detections and navigation prompts.
+* **Google Maps Navigation:** Search a destination, optionally auto-fill current location, and receive continuous voice direction even when switching screens.
+* **User Authentication:** Register, log in, token-based sessions.
+* **User Dashboard:** History, detections summary, preferences.
+* **Accessibility Tools:** High-contrast UI, large fonts, screen-reader friendly layouts.
 
-   * Lets users search and select where they want to go on a Google Map.
-   * Auto-fills current location when permission is granted.
-   * Provides continuous voice guidance even when the user switches screens (background audio).
+**Main Screens**
 
-**Models & Techniques**
-
-* YOLO-based object detector (backend inference).
-* Optional depth estimation support (backend) for richer context.
-* Mobile client streams frames or periodically snapshots for inference.
-* Google Maps SDK + Directions API for routing and voice guidance.
-
----
+* HomeScreen
+* RegisterScreen
+* LoginScreen
+* DashboardScreen
+* AdminDashboardScreen
+* CameraScreen
+* MapNavigationScreen
+* AboutScreen
+* AccessibilityScreen
+* ProfileScreen
+* SafetyScreen
 
 ## Requirements
 
 ### Backend
 
 * **Python 3.10+**
-* FastAPI, Uvicorn
-* Torch / Ultralytics YOLO
-* Pillow, OpenCV
-* (Optional) Redis for caching
+* pip, setuptools, wheel
+* GPU optional but recommended for faster inference
 
 ### Mobile
 
 * **Node.js 18+**
 * Expo SDK 54
-* React Native 0.81+
-* expo-camera, expo-speech, expo-location
-* @react-navigation/native, native-stack
-* react-native-maps (Google provider)
-
-**Recommended hardware**
-
-* 8GB+ RAM for backend inference
-* GPU optional but improves speed
-
----
+* Android Studio emulator or a physical phone
+* Google Maps API key (Directions + Places enabled)
 
 ## Local Setup
 
@@ -68,7 +62,7 @@ cd object-detector
 
 ## Backend Setup (FastAPI)
 
-### 2. Create and activate virtual environment
+### 2. Create and activate a virtual environment
 
 ```bash
 cd backend
@@ -79,97 +73,87 @@ source .venv/bin/activate
 ### 3. Install dependencies
 
 ```bash
-pip install --upgrade pip
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### 4. Add environment variables
 
 Create `backend/.env`:
 
 ```env
-JWT_SECRET=your_jwt_secret
-MODEL_PATH=./models/yolo.pt
-ALLOWED_ORIGINS=*
+MONGO_URI=<your_mongodb_uri>
+JWT_SECRET=<your_secret>
+MODEL_PATH=models/yolo.pt
 ```
 
-### 5. Run the backend server
+### 5. Run the backend API
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Backend will run at:
+API will run at:
 
 ```
 http://127.0.0.1:8000
 ```
 
-### 6. Test backend detection
-
-```bash
-curl -X POST http://127.0.0.1:8000/detect/image \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@/path/to/image.jpg"
-```
-
 ---
 
-## Mobile Setup (React Native + Expo)
+## Mobile Setup (React Native Expo)
 
-### 7. Install dependencies
+### 6. Install mobile dependencies
 
 ```bash
 cd ../mobile
 npm install
 ```
 
-### 8. Configure environment variables
+### 7. Add environment variables
 
 Create `mobile/.env`:
 
 ```env
 EXPO_PUBLIC_API_URL=http://<YOUR_LOCAL_IP>:8000
-EXPO_PUBLIC_GOOGLE_MAPS_KEY=your_google_maps_key
+EXPO_PUBLIC_GOOGLE_MAPS_KEY=<your_google_maps_key>
 ```
 
-To find your local IP:
+Replace `<YOUR_LOCAL_IP>` with your computer’s LAN IP (e.g., `192.168.x.x`), so your phone can reach the backend.
 
-```bash
-hostname -I | awk '{print $1}'
-```
-
-### 9. Start the Expo app
+### 8. Start the Expo app
 
 ```bash
 npm run start
 ```
 
-* Scan the QR code with **Expo Go** (Android/iOS).
-* Ensure your phone and laptop are on the same network.
+* Press `i` for iOS simulator
+* Press `a` for Android emulator
+* Or scan the QR code using Expo Go on your phone.
 
 ---
 
-## Using the App
+## Running Real-Time Detection
 
-### Object Detection
+1. Log in
+2. Open **CameraScreen**
+3. The app continuously:
 
-1. Log in.
-2. Open the **Camera** screen.
-3. The app will:
+   * captures frames
+   * sends them to `/detect/image`
+   * renders bounding boxes
+   * speaks detected object names
 
-   * request camera permission
-   * start detecting objects automatically
-4. Detected objects appear with bounding boxes and labels.
-5. The voice assistant reads detections aloud.
+---
 
-### Navigation
+## Google Maps Navigation Flow
 
-1. Go to the **Navigation** screen.
-2. Search where you want to go.
-3. Confirm destination.
-4. Start voice guidance.
-5. Guidance continues even if you switch pages.
+1. Open **MapNavigationScreen**
+2. Tap destination input
+3. Search where you want to go
+4. If location permission is granted, your start location auto-fills
+5. Tap **Start Navigation**
+6. The app keeps voice guidance running even when you switch screens.
 
 ---
 
@@ -180,20 +164,20 @@ npm run start
 * `POST /auth/register`
 * `POST /auth/verify`
 * `POST /auth/login`
+* `POST /auth/logout`
+* `GET /auth/me`
 
 ### Detection
 
 * `POST /detect/image`
-  Upload a single image and return detection boxes.
+  Accepts image upload and returns detected objects.
 
-* `POST /detect/frame`
-  Accepts a camera frame and returns real-time detections.
+### Dashboard / Admin
 
-### Navigation (Mobile uses Google APIs directly)
-
-* Google Places Autocomplete
-* Google Directions
-* Google Maps SDK
+* `GET /dashboard/detections`
+* `GET /dashboard/reports/summary`
+* `GET /admin/users`
+* `GET /admin/detections`
 
 ---
 
@@ -203,33 +187,42 @@ npm run start
 object-detector/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI app entry
-│   │   ├── auth.py              # Authentication routes
-│   │   ├── detect.py            # Detection routes
-│   │   ├── models.py            # DB models
-│   │   ├── utils.py             # JWT + helpers
+│   │   ├── main.py                 # FastAPI app entry point
+│   │   ├── auth.py                 # Auth routes
+│   │   ├── detect.py               # Detection routes
+│   │   ├── models.py               # DB models
+│   │   ├── utils.py                # Helpers (JWT, hashing, etc.)
 │   │   └── services/
-│   │       └── detector.py      # YOLO inference logic
-│   ├── models/                  # Trained YOLO weights
+│   │       └── yolo_service.py     # Model inference service
+│   ├── models/                     # Trained YOLO model weights (git-ignored)
 │   ├── requirements.txt
 │   └── .env
 │
 ├── mobile/
 │   ├── src/
 │   │   ├── api/
-│   │   │   ├── client.ts        # fetch wrapper
-│   │   │   └── detect.ts        # detection API calls
-│   │   ├── screens/
-│   │   │   ├── LoginScreen.tsx
-│   │   │   ├── RegisterScreen.tsx
-│   │   │   ├── CameraScreen.tsx # realtime detection feed
-│   │   │   └── NavigationScreen.tsx # google maps nav
-│   │   ├── navigation/
-│   │   │   └── RootNavigator.tsx
+│   │   │   ├── client.ts           # Fetch wrapper
+│   │   │   ├── auth.ts             # Auth calls
+│   │   │   └── detect.ts           # Detect calls
 │   │   ├── context/
-│   │   │   └── AuthContext.tsx
+│   │   │   └── AuthContext.tsx     # Auth state provider
+│   │   ├── navigation/
+│   │   │   └── RootNavigator.tsx   # App navigation
+│   │   ├── screens/
+│   │   │   ├── HomeScreen.tsx
+│   │   │   ├── RegisterScreen.tsx
+│   │   │   ├── LoginScreen.tsx
+│   │   │   ├── DashboardScreen.tsx
+│   │   │   ├── AdminDashboardScreen.tsx
+│   │   │   ├── CameraScreen.tsx
+│   │   │   ├── MapNavigationScreen.tsx
+│   │   │   ├── AboutScreen.tsx
+│   │   │   ├── AccessibilityScreen.tsx
+│   │   │   ├── ProfileScreen.tsx
+│   │   │   └── SafetyScreen.tsx
 │   │   └── theme/
-│   ├── App.tsx
+│   │       └── index.ts            # Theme + colors
+│   ├── app.json
 │   ├── package.json
 │   └── .env
 │
@@ -240,99 +233,83 @@ object-detector/
 
 ## Model Artifacts
 
-Model weight files are **not committed to GitHub** due to size.
-To run detection you must:
+Model weights are not stored in Git due to size.
+To use detections:
 
-1. Download weights into:
+1. Place trained weights inside:
 
    ```
    backend/models/yolo.pt
    ```
-2. Ensure `MODEL_PATH` in `backend/.env` matches the file location.
+2. Ensure `MODEL_PATH=models/yolo.pt` is set in `.env`
 
 ---
 
-## Google Maps Setup
+## Hardware Requirements
 
-To enable navigation:
-
-1. Create a Google Cloud project.
-2. Enable:
-
-   * **Maps SDK for Android**
-   * **Maps SDK for iOS**
-   * **Places API**
-   * **Directions API**
-3. Generate an API key.
-4. Add it in:
-
-   ```
-   mobile/.env
-   EXPO_PUBLIC_GOOGLE_MAPS_KEY=your_key_here
-   ```
-5. For iOS, ensure your Expo config has:
-
-   * location permissions
-   * Google Maps key set in `app.json/app.config.js`
+* Minimum: 8GB RAM, CPU inference supported
+* Recommended: GPU machine for training/retraining
+* Mobile: Any modern Android/iOS device with camera
 
 ---
 
 ## Troubleshooting
 
-**Mobile says “Network request timed out”?**
+**Backend not reachable from phone**
 
-* Make sure backend is running with:
+* Ensure backend started with:
 
   ```bash
-  --host 0.0.0.0
+  uvicorn app.main:app --host 0.0.0.0 --port 8000
   ```
-* Confirm your phone uses the same Wi-Fi as your laptop.
-* Confirm `EXPO_PUBLIC_API_URL` matches your laptop IP.
+* Confirm `EXPO_PUBLIC_API_URL` uses your LAN IP.
 
-**Camera not ready / cannot capture?**
+**Network request timed out**
 
-* Wait for the `onCameraReady` event before starting the detect loop.
-* Avoid calling detection too early on mount.
+* Phone and laptop must be on the same Wi-Fi.
+* Check firewall rules for port `8000`.
 
-**No detections appearing?**
+**Camera not ready yet**
 
-* Test backend separately with curl.
-* Confirm model weights exist in `backend/models/`.
-* Check backend logs for inference errors.
+* Wait for `onCameraReady` callback before capturing frames.
 
-**Google Maps not showing?**
+**No detections showing**
 
-* Confirm Maps SDK enabled in Google Cloud console.
-* Ensure API key restrictions allow your package/bundle ID.
-* Restart Expo after editing `.env`.
+* Confirm the backend endpoint works:
+
+  ```bash
+  curl -X POST http://127.0.0.1:8000/detect/image
+  ```
+* Confirm model path is correct and weights exist.
+
+**Google Maps not loading**
+
+* Ensure your Google Maps key is valid and enabled for:
+
+  * Places API
+  * Directions API
+  * Maps SDK
 
 ---
 
 ## Contributing
 
-Contributions are welcome.
-Please open a pull request or issue with:
+Contributions are welcome. Please:
 
-* bug reports
-* feature improvements
-* UI/UX upgrades
-* model accuracy enhancements
+1. Fork the repo
+2. Create a feature branch
+3. Submit a pull request with clear changelog notes
 
 ---
 
 ## For Reviewers
 
-To evaluate quickly without retraining:
+To run the project without retraining:
 
 1. Clone repo
-2. Place YOLO weights in `backend/models/`
-3. Run backend
-4. Run mobile app
-5. Test:
+2. Install backend + mobile dependencies
+3. Add `.env` files
+4. Place model weights in `backend/models/`
+5. Run backend then mobile app
 
-   * realtime detection
-   * navigation search + voice guidance
 
----
-
-If you want, I can also generate a **shorter “RUN_INSTRUCTIONS.md”** version of this for quick demo/testing.
