@@ -1,69 +1,31 @@
-# Object Detector & Navigation Assistant (Bloculis)
+# Object Detector + Navigation Assistant
 
-A real-time object detection and navigation assistant for visually impaired users. The system uses deep learning (YOLOv8 + depth estimation) to detect objects from the phone camera, estimate distance, and give spoken guidance. It also includes Google Maps voice navigation so a user can search a destination, start turn-by-turn guidance, and keep hearing directions even when navigating to other screens.
+A real-time object detection and navigation assistant built for mobile. The app uses deep-learning object detection to identify nearby objects through the phone camera and provides voice guidance and map-based navigation to a user’s chosen destination. The system has a FastAPI backend, a React Native (Expo) mobile client, and integrates Google Maps for turn-by-turn voice navigation.
 
 ---
 
 ## Project Overview
 
-This app helps users safely move around by:
+This system supports two major functions:
 
-* Detecting objects in real time using the mobile camera
-* Estimating how far objects are from the user
-* Announcing detected objects and distances through voice feedback
-* Providing Google Maps based navigation with voice guidance that continues in the background
+1. **Real-time Object Detection**
 
-**Key detection classes (example):**
+   * Detects everyday objects from the live camera feed.
+   * Displays labeled bounding boxes on screen.
+   * Speaks detections aloud through a built-in voice assistant.
 
-* Person
-* Vehicles (car, bus, bike)
-* Obstacles (chair, table, wall, stairs)
-* Common outdoor objects (pole, tree, dog, etc.)
+2. **Map-Based Voice Navigation**
 
-**Models:**
+   * Lets users search and select where they want to go on a Google Map.
+   * Auto-fills current location when permission is granted.
+   * Provides continuous voice guidance even when the user switches screens (background audio).
 
-* YOLOv8 Object Detection
-* MiDaS Depth Estimation (distance awareness)
+**Models & Techniques**
 
-**Platforms:**
-
-* Mobile: React Native (Expo SDK 54)
-* Backend: FastAPI (Python)
-* Database: MongoDB Atlas
-
----
-
-## Features
-
-### ✅ Real-Time Object Detection
-
-* Live detection from camera preview
-* Bounding boxes + labels
-* Confidence filtering
-
-### ✅ Distance Estimation
-
-* Depth estimation from MiDaS
-* Spoken distance warnings (e.g., “Person 1.8 meters ahead”)
-
-### ✅ Voice Assistant
-
-* Text-to-Speech feedback
-* Auto-repeat when new objects appear
-* Continues speaking while user uses other features
-
-### ✅ Google Maps Navigation
-
-* Destination search (Places Autocomplete)
-* Start voice navigation from current location
-* Turn-by-turn spoken directions
-* Background voice continues even if user changes screens
-
-### ✅ User System
-
-* Register / Login
-* Token-based routes
-* Detection history saved to DB
+* YOLO-based object detector (backend inference).
+* Optional depth estimation support (backend) for richer context.
+* Mobile client streams frames or periodically snapshots for inference.
+* Google Maps SDK + Directions API for routing and voice guidance.
 
 ---
 
@@ -72,32 +34,41 @@ This app helps users safely move around by:
 ### Backend
 
 * **Python 3.10+**
-* pip, setuptools, wheel
-* Recommended: 8GB+ RAM for model inference
+* FastAPI, Uvicorn
+* Torch / Ultralytics YOLO
+* Pillow, OpenCV
+* (Optional) Redis for caching
 
 ### Mobile
 
 * **Node.js 18+**
-* Expo CLI
-* Android Emulator or physical device
 * Expo SDK 54
+* React Native 0.81+
+* expo-camera, expo-speech, expo-location
+* @react-navigation/native, native-stack
+* react-native-maps (Google provider)
+
+**Recommended hardware**
+
+* 8GB+ RAM for backend inference
+* GPU optional but improves speed
 
 ---
 
 ## Local Setup
 
-## 1. Clone repository
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/object-detector.git
+git clone <YOUR_GITHUB_REPO_URL>
 cd object-detector
 ```
 
 ---
 
-# Backend Setup (FastAPI)
+## Backend Setup (FastAPI)
 
-## 2. Create and activate a virtual environment
+### 2. Create and activate virtual environment
 
 ```bash
 cd backend
@@ -105,101 +76,100 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-## 3. Install dependencies
+### 3. Install dependencies
 
 ```bash
-pip install --upgrade pip setuptools wheel
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## 4. Create `.env`
+### 4. Configure environment variables
 
-Create a file called `backend/.env`:
+Create `backend/.env`:
 
 ```env
-MONGODB_URI=<your-mongodb-atlas-uri>
-JWT_SECRET=<your-secret>
-MODEL_PATH=models/yolov8.pt
-DEPTH_MODEL_PATH=models/midas.pt
+JWT_SECRET=your_jwt_secret
+MODEL_PATH=./models/yolo.pt
+ALLOWED_ORIGINS=*
 ```
 
-## 5. Run backend server
+### 5. Run the backend server
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Backend runs at:
+Backend will run at:
 
 ```
 http://127.0.0.1:8000
 ```
 
+### 6. Test backend detection
+
+```bash
+curl -X POST http://127.0.0.1:8000/detect/image \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/path/to/image.jpg"
+```
+
 ---
 
-# Mobile Setup (Expo React Native)
+## Mobile Setup (React Native + Expo)
 
-## 6. Install dependencies
+### 7. Install dependencies
 
 ```bash
 cd ../mobile
 npm install
 ```
 
-## 7. Create `.env`
+### 8. Configure environment variables
 
 Create `mobile/.env`:
 
 ```env
-EXPO_PUBLIC_API_URL=http://<YOUR_PC_IP>:8000
-EXPO_PUBLIC_GOOGLE_MAPS_KEY=<your-google-maps-api-key>
+EXPO_PUBLIC_API_URL=http://<YOUR_LOCAL_IP>:8000
+EXPO_PUBLIC_GOOGLE_MAPS_KEY=your_google_maps_key
 ```
 
-To get your PC IP:
+To find your local IP:
 
 ```bash
 hostname -I | awk '{print $1}'
 ```
 
-Example:
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.0.12:8000
-```
-
-## 8. Start the mobile app
+### 9. Start the Expo app
 
 ```bash
 npm run start
 ```
 
-Then:
-
-* Press **i** to run on iOS simulator (Mac only)
-* Press **a** for Android emulator
-* Or scan QR using Expo Go (same Wi-Fi)
+* Scan the QR code with **Expo Go** (Android/iOS).
+* Ensure your phone and laptop are on the same network.
 
 ---
 
-## Google Maps Setup
+## Using the App
 
-To enable navigation features:
+### Object Detection
 
-1. Go to **Google Cloud Console**
-2. Create a project
-3. Enable these APIs:
+1. Log in.
+2. Open the **Camera** screen.
+3. The app will:
 
-   * Maps SDK for Android
-   * Maps SDK for iOS
-   * Directions API
-   * Places API
-   * Geocoding API
-4. Create an API key and restrict it to your app
-5. Add key to mobile `.env`:
+   * request camera permission
+   * start detecting objects automatically
+4. Detected objects appear with bounding boxes and labels.
+5. The voice assistant reads detections aloud.
 
-```env
-EXPO_PUBLIC_GOOGLE_MAPS_KEY=YOUR_KEY_HERE
-```
+### Navigation
+
+1. Go to the **Navigation** screen.
+2. Search where you want to go.
+3. Confirm destination.
+4. Start voice guidance.
+5. Guidance continues even if you switch pages.
 
 ---
 
@@ -207,33 +177,23 @@ EXPO_PUBLIC_GOOGLE_MAPS_KEY=YOUR_KEY_HERE
 
 ### Auth
 
-* `POST /auth/register` – create account
-* `POST /auth/verify` – verify OTP / admission code
-* `POST /auth/login` – login user
+* `POST /auth/register`
+* `POST /auth/verify`
+* `POST /auth/login`
 
 ### Detection
 
-* `POST /predict/image` – run YOLO + depth on image
+* `POST /detect/image`
+  Upload a single image and return detection boxes.
 
-Example request:
+* `POST /detect/frame`
+  Accepts a camera frame and returns real-time detections.
 
-```bash
-curl -X POST http://127.0.0.1:8000/predict/image \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@test.jpg"
-```
+### Navigation (Mobile uses Google APIs directly)
 
-Example response:
-
-```json
-{
-  "boxes": [
-    { "label": "person", "confidence": 0.91, "x": 120, "y": 70, "w": 220, "h": 360, "distance": 1.9 }
-  ],
-  "image_width": 640,
-  "image_height": 480
-}
-```
+* Google Places Autocomplete
+* Google Directions
+* Google Maps SDK
 
 ---
 
@@ -243,27 +203,31 @@ Example response:
 object-detector/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI entrypoint
-│   │   ├── auth.py              # auth routes
-│   │   ├── detect.py            # detection endpoints
-│   │   ├── utils.py             # hashing, jwt, helpers
-│   │   ├── models/              # DB models
-│   │   └── services/            # YOLO + depth services
-│   ├── models/                  # trained weights (git-ignored)
+│   │   ├── main.py              # FastAPI app entry
+│   │   ├── auth.py              # Authentication routes
+│   │   ├── detect.py            # Detection routes
+│   │   ├── models.py            # DB models
+│   │   ├── utils.py             # JWT + helpers
+│   │   └── services/
+│   │       └── detector.py      # YOLO inference logic
+│   ├── models/                  # Trained YOLO weights
 │   ├── requirements.txt
 │   └── .env
 │
 ├── mobile/
 │   ├── src/
+│   │   ├── api/
+│   │   │   ├── client.ts        # fetch wrapper
+│   │   │   └── detect.ts        # detection API calls
 │   │   ├── screens/
 │   │   │   ├── LoginScreen.tsx
 │   │   │   ├── RegisterScreen.tsx
-│   │   │   ├── CameraScreen.tsx       # realtime detection view
-│   │   │   ├── MapScreen.tsx          # google maps navigation
-│   │   │   └── HistoryScreen.tsx
+│   │   │   ├── CameraScreen.tsx # realtime detection feed
+│   │   │   └── NavigationScreen.tsx # google maps nav
 │   │   ├── navigation/
+│   │   │   └── RootNavigator.tsx
 │   │   ├── context/
-│   │   ├── api/
+│   │   │   └── AuthContext.tsx
 │   │   └── theme/
 │   ├── App.tsx
 │   ├── package.json
@@ -276,68 +240,99 @@ object-detector/
 
 ## Model Artifacts
 
-Model weight files are **not stored on GitHub** due to size.
+Model weight files are **not committed to GitHub** due to size.
+To run detection you must:
 
-To use detection:
-
-1. Download / train YOLO weights
-2. Place in:
+1. Download weights into:
 
    ```
-   backend/models/yolov8.pt
-   backend/models/midas.pt
+   backend/models/yolo.pt
    ```
-3. Restart backend
+2. Ensure `MODEL_PATH` in `backend/.env` matches the file location.
+
+---
+
+## Google Maps Setup
+
+To enable navigation:
+
+1. Create a Google Cloud project.
+2. Enable:
+
+   * **Maps SDK for Android**
+   * **Maps SDK for iOS**
+   * **Places API**
+   * **Directions API**
+3. Generate an API key.
+4. Add it in:
+
+   ```
+   mobile/.env
+   EXPO_PUBLIC_GOOGLE_MAPS_KEY=your_key_here
+   ```
+5. For iOS, ensure your Expo config has:
+
+   * location permissions
+   * Google Maps key set in `app.json/app.config.js`
 
 ---
 
 ## Troubleshooting
 
-### ❌ Mobile says “Network request failed / timed out”
+**Mobile says “Network request timed out”?**
 
-* Ensure backend is running
-* Ensure phone and PC are on same Wi-Fi
-* Use PC IP in mobile `.env`
-* Restart expo:
-
-```bash
-npm run start -- --clear
-```
-
-### ❌ iOS Camera not ready / Image could not be captured
-
-* Wait for `onCameraReady`
-* Use real device if simulator fails
-* Ensure permissions granted in Settings
-
-### ❌ No detections show
-
-* Confirm backend returns results:
+* Make sure backend is running with:
 
   ```bash
-  curl http://<pc-ip>:8000/health
+  --host 0.0.0.0
   ```
-* Test `/predict/image` directly
-* Check model paths in backend `.env`
+* Confirm your phone uses the same Wi-Fi as your laptop.
+* Confirm `EXPO_PUBLIC_API_URL` matches your laptop IP.
 
----
+**Camera not ready / cannot capture?**
 
-## Future Improvements
+* Wait for the `onCameraReady` event before starting the detect loop.
+* Avoid calling detection too early on mount.
 
-* Offline detection & TTS
-* Multi-language voice feedback
-* Better object tracking between frames
-* Custom user risk levels (warn earlier/late)
+**No detections appearing?**
+
+* Test backend separately with curl.
+* Confirm model weights exist in `backend/models/`.
+* Check backend logs for inference errors.
+
+**Google Maps not showing?**
+
+* Confirm Maps SDK enabled in Google Cloud console.
+* Ensure API key restrictions allow your package/bundle ID.
+* Restart Expo after editing `.env`.
 
 ---
 
 ## Contributing
 
-Pull requests are welcome.
-If you add features, please update the docs and keep code clean.
+Contributions are welcome.
+Please open a pull request or issue with:
+
+* bug reports
+* feature improvements
+* UI/UX upgrades
+* model accuracy enhancements
 
 ---
 
-## License
+## For Reviewers
 
-MIT License.
+To evaluate quickly without retraining:
+
+1. Clone repo
+2. Place YOLO weights in `backend/models/`
+3. Run backend
+4. Run mobile app
+5. Test:
+
+   * realtime detection
+   * navigation search + voice guidance
+
+---
+
+If you want, I can also generate a **shorter “RUN_INSTRUCTIONS.md”** version of this for quick demo/testing.
