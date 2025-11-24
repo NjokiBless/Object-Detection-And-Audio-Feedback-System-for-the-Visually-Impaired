@@ -30,10 +30,10 @@ function normalize(input?: string, fallback?: string): string {
 /* ------------------------------------------------------------------ */
 /* Base URLs                                                           */
 /* ------------------------------------------------------------------ */
-const AUTH_FALLBACK   = "http://192.168.0.105:3001"; // change to your LAN IP if desired
+const AUTH_FALLBACK = "http://192.168.0.105:3001"; // change to your LAN IP if desired
 const DETECT_FALLBACK = "http://192.168.0.105:8010";
 
-export const AUTH_BASE   = normalize(process.env.EXPO_PUBLIC_API_URL,    AUTH_FALLBACK);
+export const AUTH_BASE = normalize(process.env.EXPO_PUBLIC_API_URL, AUTH_FALLBACK);
 export const DETECT_BASE = normalize(process.env.EXPO_PUBLIC_DETECT_URL, DETECT_FALLBACK);
 
 /* ------------------------------------------------------------------ */
@@ -92,15 +92,29 @@ export const sosApi = {
   getContacts: () => authApi.get("/sos/contacts"),
   saveContacts: (contacts: Array<{ name?: string; email?: string; phone?: string }>) =>
     authApi.post("/sos/contacts", { contacts }),
-  send: (payload: { fullName?: string; lat?: number; lng?: number; phones?: string[]; emails?: string[] }) =>
-    authApi.post("/sos/send", payload), // if you use device-only sending, this route can be a no-op
+  send: (payload: {
+    fullName?: string;
+    lat?: number;
+    lng?: number;
+    phones?: string[];
+    emails?: string[];
+  }) => authApi.post("/sos/send", payload), // if you use device-only sending, this route can be a no-op
 };
 
 /* ------------------------------------------------------------------ */
 /* Profile helpers (optional, convenient)                              */
 /* ------------------------------------------------------------------ */
 export const profileApi = {
-  get:   () => authApi.get("/profile"),
-  update:(patch: Partial<{ firstName: string; lastName: string; dobISO: string; country: string; gender: string; phone: string }>) =>
+  get: () => authApi.get("/profile"),
+  update: (patch: Partial<{ firstName: string; lastName: string; dobISO: string; country: string; gender: string; phone: string }>) =>
     authApi.put("/profile", patch),
+};
+
+/* ------------------------------------------------------------------ */
+/* Security helpers (change password, logout all)                      */
+/* ------------------------------------------------------------------ */
+export const securityApi = {
+  changePassword: (payload: { currentPassword: string; newPassword: string }) =>
+    authApi.post("/auth/change-password", payload),
+  logoutAll: () => authApi.post("/auth/logout-all"),
 };

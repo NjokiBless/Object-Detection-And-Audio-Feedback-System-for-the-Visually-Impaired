@@ -1,67 +1,84 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
-import { Button, Text } from "react-native-paper";
-import { Camera, CameraView } from "expo-camera";
+import { View, StyleSheet, Dimensions, Text, TouchableOpacity } from "react-native";
+import { CameraView, Camera } from "expo-camera";
 import * as Speech from "expo-speech";
 import { Audio } from "expo-av";
-import axios from "axios";
 
-import DetectionOverlay from "../components/DetectionOverlay";
-import { DETECT_BASE } from "../api/client";
+// TF
+import * as tf from "@tensorflow/tfjs";
+import "@tensorflow/tfjs-react-native";
+import * as cocoSsd from "@tensorflow-models/coco-ssd";
+import { decodeJpeg } from "@tensorflow/tfjs-react-native";
 
-type Item = {
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+
+type Det = {
   name: string;
   score: number;
-  bbox: [number, number, number, number];
-  pos: string;
-  prox: string;
+  bbox: [number, number, number, number]; // [x,y,w,h]
 };
 
-export default function AssistantScreen({ navigation }: any) {
-  // --- camera view size (4:3) ---
+export default function AssistantScreen() {
   const camRef = useRef<CameraView>(null);
-  const viewW = Dimensions.get("window").width;
-  const viewH = Math.round((viewW * 4) / 3);
 
-  // --- permissions ---
-  type Perm = { granted: boolean } | null;
-  const [perm, setPerm] = useState<Perm>(null);
-  const requestPerm = async () => {
-    const r = await Camera.requestCameraPermissionsAsync();
-    setPerm(r as any);
-  };
+  const [camPerm, setCamPerm] = useState<{ granted: boolean } | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
 
+  const [tfReady, setTfReady] = useState(false);
+  const [model, setModel] = useState<cocoSsd.ObjectDetection | null>(null);
+
+  const [running, setRunning] = useState(false);
+  const [status, setStatus] = useState<string | null>("Loading model…");
+
+  const [detections, setDetections] = useState<Det[]>([]);
+  const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
+
+  // remember speech per label
+  const speakStateRef = useRef<Record<string, { lastTime: number; lastHeight: number }>>({});
+
+  // 1) camera + audio
   useEffect(() => {
     (async () => {
-      const p = await Camera.getCameraPermissionsAsync();
-      if (!p.granted) {
-        const r = await Camera.requestCameraPermissionsAsync();
-        setPerm(r as any);
-      } else {
-        setPerm(p as any);
-      }
+      const p = await Camera.requestCameraPermissionsAsync();
+      setCamPerm(p);
 
-      // Make sure speech plays even in silent mode on iOS
       try {
         await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
         });
       } catch {}
     })();
   }, []);
 
-  // --- runtime state ---
-  const [ready, setReady] = useState(false);
-  const [running, setRunning] = useState(true);
-  const [muted, setMuted] = useState(false);
+  // 2) TF init
+  useEffect(() => {
+    (async () => {
+      try {
+        await tf.ready();
 
-  const [items, setItems] = useState<Item[]>([]);
-  const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
+        // IMPORTANT: use RN backend
+        try {
+          await tf.setBackend("rn-webgl");
+        } catch (e) {
+          console.log("could not set rn-webgl backend, using default", e);
+        }
 
-  // --- detection loop ---
+        // sometimes helps on RN
+        tf.env().set("WEBGL_PACK", false);
+
+        const m = await cocoSsd.load(); // default mobilenet
+        setModel(m);
+        setTfReady(true);
+        setStatus("Model loaded. Ready.");
+        setTimeout(() => setStatus(null), 1500);
+      } catch (err) {
+        console.log("TF init error", err);
+        setStatus("Error loading model.");
+      }
+    })();
+  }, []);
+
+  // 3) detection loop
   useEffect(() => {
     let stopped = false;
 
@@ -69,203 +86,289 @@ export default function AssistantScreen({ navigation }: any) {
       if (stopped) return;
 
       try {
-        if (running && ready && camRef.current) {
+        if (running && cameraReady && tfReady && model && camRef.current) {
+          // take picture from camera
           const photo = await camRef.current.takePictureAsync({
-            quality: 0.4,
+            quality: 0.35, // a bit lower = faster
             skipProcessing: true,
-            base64: true,
+            base64: false,
           });
 
-          if (photo?.base64) {
-            const image = `data:image/jpeg;base64,${photo.base64}`;
-            const url = `${DETECT_BASE}/detect`;
+          const resp = await fetch(photo.uri);
+          const buf = await resp.arrayBuffer();
+          const imgTensor = decodeJpeg(new Uint8Array(buf));
 
-            const { data } = await axios.post(url, { image }, { timeout: 15000 });
+          const preds = await model.detect(imgTensor as any);
+          // show how many we got
+          console.log("COCO-SSD preds:", preds.length);
 
-            const fw: number = data?.width ?? photo.width ?? 0;
-            const fh: number = data?.height ?? photo.height ?? 0;
-            const dets: any[] = Array.isArray(data?.detections) ? data.detections : [];
+          const fw = imgTensor.shape[1];
+          const fh = imgTensor.shape[0];
+          setFrameSize({ w: fw, h: fh });
 
-            setFrameSize({ w: fw, h: fh });
+          const MIN_CONF = 0.7;
+          const high = preds
+            .filter((p) => p.score >= MIN_CONF)
+            .map((p: any) => ({
+              name: p.class,
+              score: p.score,
+              bbox: p.bbox as [number, number, number, number],
+            }));
 
-            const parsed: Item[] = dets.map((d) => {
-              const [x1, y1, x2, y2] = d.bbox as [number, number, number, number];
-              const cx = (x1 + x2) / 2;
-              const pos = bucketPos(cx, fw);
-              const prox = bucketProx(x1, y1, x2, y2, fw, fh);
-              return { name: d.name, score: d.score, bbox: [x1, y1, x2, y2], pos, prox };
-            });
+          setDetections(high);
 
-            setItems(parsed);
-
-            // --- quick debug line in Metro (and can be seen in terminal) ---
-            console.log(`[assistant] ${parsed.length} detections`, parsed.map(p => p.name).slice(0,3));
-
-            if (!muted && parsed.length > 0) {
-              speakGuidance(parsed);
-            }
+          if (high.length > 0) {
+            speakLikeHtml(high, fw, fh, speakStateRef.current);
           }
+
+          imgTensor.dispose?.();
         }
       } catch (err) {
-        console.log("[assistant] error", err?.toString?.() || err);
+        console.log("detect err:", err);
       } finally {
-        setTimeout(loop, 500); // ~2 fps; safe for CPU + avoids saturating network
+        // loop
+        setTimeout(loop, 700);
       }
     }
 
-    setTimeout(loop, 500);
+    setTimeout(loop, 700);
+
     return () => {
       stopped = true;
     };
-  }, [running, ready, muted]);
+  }, [running, cameraReady, tfReady, model]);
 
-  // --- permission UI ---
-  if (perm === null) {
+  // permissions UI
+  if (camPerm === null) {
     return (
       <View style={styles.center}>
-        <Text>Checking camera permission…</Text>
+        <Text style={{ color: "#fff" }}>Requesting camera…</Text>
       </View>
     );
   }
-  if (!perm.granted) {
+  if (!camPerm.granted) {
     return (
       <View style={styles.center}>
-        <Text>Camera permission is required.</Text>
-        <Button mode="contained" onPress={requestPerm} style={{ marginTop: 12 }}>
-          Grant
-        </Button>
+        <Text style={{ color: "#fff", marginBottom: 10 }}>Camera permission needed.</Text>
+        <TouchableOpacity
+          onPress={async () => {
+            const p = await Camera.requestCameraPermissionsAsync();
+            setCamPerm(p);
+          }}
+          style={[styles.startButton, { backgroundColor: "#2563eb" }]}
+        >
+          <Text style={styles.startButtonText}>Grant</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.screen}>
+      {/* camera */}
       <CameraView
         ref={camRef}
-        style={{ width: viewW, height: viewH }}
+        style={StyleSheet.absoluteFill}
         facing="back"
-        onCameraReady={() => setReady(true)}
+        onCameraReady={() => setCameraReady(true)}
       />
 
-      <DetectionOverlay
-        items={items}
-        frameW={frameSize.w}
-        frameH={frameSize.h}
-        viewW={viewW}
-        viewH={viewH}
-      />
+      {/* boxes like canvas */}
+      <View style={StyleSheet.absoluteFill}>
+        <DetectionBoxes detections={detections} frameW={frameSize.w} frameH={frameSize.h} />
+      </View>
 
-      {/* Tiny debug banner so you know if the model sees anything */}
-      <View style={styles.debugBar}>
-        <Text style={{ color: "#cbd5e1" }}>
-          {items.length ? `${items.length} object(s): ${items.map(i=>i.name).slice(0,3).join(", ")}` : "No detections"}
+      {/* top status */}
+      {status ? (
+        <View style={styles.status}>
+          <Text style={styles.statusText}>{status}</Text>
+        </View>
+      ) : null}
+
+      {/* detection count (tiny, top-left) */}
+      <View style={styles.countBar}>
+        <Text style={{ color: "#fff", fontSize: 12 }}>
+          Detections: {detections.length}
         </Text>
       </View>
 
-      <View style={styles.row}>
-        <Button
-          mode={running ? "contained-tonal" : "contained"}
-          onPress={() => setRunning((r) => !r)}
-          style={styles.btn}
+      {/* bottom button */}
+      <View style={styles.controls}>
+        <TouchableOpacity
+          onPress={() => {
+            if (!tfReady || !model) {
+              setStatus("Model not ready yet");
+              setTimeout(() => setStatus(null), 1500);
+              return;
+            }
+            setRunning((r) => !r);
+          }}
+          style={[
+            styles.startButton,
+            { backgroundColor: running ? "#dc2626" : "#2563eb" },
+          ]}
         >
-          {running ? "Pause" : "Start"}
-        </Button>
-
-        <Button
-          mode={muted ? "contained-tonal" : "contained"}
-          onPress={() => setMuted((m) => !m)}
-          style={styles.btn}
-        >
-          {muted ? "Unmute" : "Mute"}
-        </Button>
-
-        <Button mode="outlined" onPress={() => navigation.goBack()} style={styles.btn}>
-          Back
-        </Button>
+          <Text style={styles.startButtonText}>
+            {running ? "Stop Detection" : "Start Detection"}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-/* -------- helpers -------- */
+/* ---------- helpers ---------- */
 
-function bucketPos(cx: number, W: number): "left" | "center" | "right" {
-  const r = cx / (W + 1e-6);
-  if (r < 0.33) return "left";
-  if (r < 0.66) return "center";
-  return "right";
-}
+function speakLikeHtml(
+  preds: Det[],
+  frameW: number,
+  frameH: number,
+  cache: Record<string, { lastTime: number; lastHeight: number }>
+) {
+  const now = Date.now();
+  const REPEAT_TIME_MS = 10000;
+  const CLOSER_FACTOR = 1.2;
 
-function bucketProx(x1: number, y1: number, x2: number, y2: number, W: number, H: number) {
-  const area = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-  const ratio = area / (W * H + 1e-6);
-  if (ratio >= 0.20) return "very close";
-  if (ratio >= 0.07) return "close";
-  return "ahead";
-}
+  const top = [...preds].sort((a, b) => b.score - a.score).slice(0, 3);
 
-function speakGuidance(arr: Item[]) {
-  const sorted = [...arr].sort((a, b) => b.score - a.score).slice(0, 3);
-  const now = Date.now() / 1000;
+  for (const p of top) {
+    const [x, y, w, h] = p.bbox;
+    const cx = x + w / 2;
+    const dir = getDirectionPhrase(cx, frameW);
+    const label = p.name;
 
-  // cooldown cache
-  // @ts-ignore
-  if (!speakGuidance._last) speakGuidance._last = {};
-  // @ts-ignore
-  const last: Record<string, number> = speakGuidance._last;
+    const prev = cache[label];
+    let shouldSpeak = false;
 
-  const cooldown = 3.5;
-  let spoke = 0;
+    if (!prev) {
+      shouldSpeak = true;
+    } else {
+      const closer = h > prev.lastHeight * CLOSER_FACTOR;
+      const timeout = now - prev.lastTime > REPEAT_TIME_MS;
+      if (closer || timeout) shouldSpeak = true;
+    }
 
-  for (const it of sorted) {
-    if (spoke >= 3) break;
-    const key = `${it.name}-${it.pos}-${it.prox}`;
-    const prev = last[key] ?? 0;
-    if (now - prev < cooldown) continue;
-
-    const phrase = `${it.name} ${it.pos}, ${it.prox}`;
-    Speech.speak(phrase, { rate: 1.0, language: "en-US" });
-    last[key] = now;
-    spoke++;
+    if (shouldSpeak) {
+      Speech.speak(`${label} ${dir}`, { rate: 1.0, language: "en-US" });
+      cache[label] = { lastTime: now, lastHeight: h };
+    }
   }
 }
 
-/* -------- styles -------- */
+function getDirectionPhrase(centerX: number, width: number) {
+  const left = width * 0.48;
+  const right = width * 0.52;
+  if (centerX < left) return "on the left, turn right.";
+  if (centerX > right) return "on the right, turn left.";
+  return "ahead, turn right to avoid.";
+}
+
+/* draw boxes */
+function DetectionBoxes({
+  detections,
+  frameW,
+  frameH,
+}: {
+  detections: Det[];
+  frameW: number;
+  frameH: number;
+}) {
+  if (!frameW || !frameH) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      {detections.map((d, i) => {
+        const [x, y, w, h] = d.bbox;
+        const scaleX = SCREEN_W / frameW;
+        const scaleY = SCREEN_H / frameH;
+
+        const left = x * scaleX;
+        const top = y * scaleY;
+        const width = w * scaleX;
+        const height = h * scaleY;
+
+        return (
+          <View key={i} style={[styles.box, { left, top, width, height }]}>
+            <View style={styles.labelBg}>
+              <Text style={styles.labelText}>
+                {d.name} ({Math.round(d.score * 100)}%)
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ---------- styles ---------- */
 
 const styles = StyleSheet.create({
-  wrap: {
+  screen: {
     flex: 1,
     backgroundColor: "#000",
-    alignItems: "center",
-  },
-  row: {
-    width: "100%",
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
-  btn: {
-    flex: 1,
-    marginHorizontal: 6,
-    borderRadius: 24,
   },
   center: {
     flex: 1,
+    backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
   },
-  debugBar: {
+  status: {
     position: "absolute",
-    top: 0,
+    top: 20,
+    width: SCREEN_W,
+    alignItems: "center",
+  },
+  statusText: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+    color: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    fontSize: 13,
+  },
+  controls: {
+    position: "absolute",
+    bottom: 28,
     left: 0,
     right: 0,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: "rgba(2,6,23,0.7)",
-    zIndex: 20,
+    alignItems: "center",
+  },
+  startButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 9999,
+  },
+  startButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  box: {
+    position: "absolute",
+    borderWidth: 3,
+    borderColor: "rgba(255,0,0,0.85)",
+  },
+  labelBg: {
+    position: "absolute",
+    top: -22,
+    left: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  labelText: {
+    color: "#fff",
+    fontSize: 12,
+  },
+  countBar: {
+    position: "absolute",
+    top: 20,
+    left: 16,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
 });
